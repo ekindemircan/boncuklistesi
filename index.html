@@ -6,6 +6,55 @@
 <title>🧿 Boncuk Listesi</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ── LOCK SCREEN ── */
+#lock-screen {
+  position: fixed; inset: 0;
+  background: #f4f6f8;
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Nunito', sans-serif;
+}
+.lock-box {
+  background: #fff;
+  border-radius: 18px;
+  padding: 44px 48px;
+  width: 360px; max-width: 92vw;
+  box-shadow: 0 4px 40px rgba(26,36,51,.13);
+  text-align: center;
+}
+.lock-icon { font-size: 44px; margin-bottom: 12px; }
+.lock-box h2 { font-size: 20px; font-weight: 700; color: #1a2433; margin-bottom: 6px; }
+.lock-box p  { font-size: 13px; color: #98aab8; margin-bottom: 28px; }
+.lock-input {
+  width: 100%; height: 44px;
+  padding: 0 16px;
+  border: 2px solid #e0e6ed;
+  border-radius: 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 600;
+  text-align: center; letter-spacing: 3px;
+  color: #1a2433; background: #f4f6f8;
+  outline: none; margin-bottom: 14px;
+  transition: border .15s;
+}
+.lock-input:focus { border-color: #3a7bd5; background: #fff; }
+.lock-input.wrong { border-color: #d94040; animation: shake .3s ease; }
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-8px)}
+  75%{transform:translateX(8px)}
+}
+.lock-btn {
+  width: 100%; height: 44px;
+  border-radius: 10px; border: none;
+  background: #2d9e6b; color: #fff;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: background .15s;
+}
+.lock-btn:hover { background: #1f7a52; }
+.lock-hint { font-size: 11.5px; color: #c8d4e0; margin-top: 14px; }
+
 /* ── RESET & BASE ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -455,8 +504,10 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
 .config-panel {
   display: none; position: fixed; inset: 0;
   background: rgba(26,36,51,.45);
-  z-index: 200; align-items: center; justify-content: center;
+  z-index: 200; align-items: flex-start; justify-content: center;
   backdrop-filter: blur(3px);
+  overflow-y: auto;
+  padding: 24px 16px;
 }
 .config-panel.open { display: flex; }
 .config-box {
@@ -465,6 +516,7 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
   padding: 32px 36px;
   width: 500px; max-width: 96vw;
   box-shadow: 0 8px 40px rgba(26,36,51,.18);
+  margin: auto;
 }
 .config-box h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
 .config-box .sub { color: var(--text2); font-size: 13px; margin-bottom: 22px; line-height: 1.5; }
@@ -491,6 +543,18 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
 </style>
 </head>
 <body>
+
+<!-- LOCK SCREEN -->
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon">🧿</div>
+    <h2>Boncuk Listesi</h2>
+    <p>Devam etmek için şifreyi gir</p>
+    <input class="lock-input" id="lock-input" type="password" placeholder="••••••" maxlength="20" />
+    <button class="lock-btn" onclick="checkPassword()">Giriş →</button>
+    <div class="lock-hint">Şifreyi unutursan index.html'den değiştirebilirsin</div>
+  </div>
+</div>
 
 <!-- TOPBAR -->
 <div class="topbar">
@@ -599,49 +663,9 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
 <div class="config-panel" id="config-panel">
   <div class="config-box">
     <h3>⚙️ Google Sheets Bağlantısı</h3>
-    <p class="sub">Verilerinin her cihazda senkronize olması için aşağıdaki adımları takip et ve Apps Script URL'ini gir.</p>
-
-    <div class="config-step">
-      <strong>1.</strong> <a href="https://sheets.google.com" target="_blank" style="color:var(--blue)">sheets.google.com</a>'da yeni bir Google Sheet aç.<br>
-      <strong>2.</strong> Üst menüden <code>Uzantılar → Apps Script</code>'e git.<br>
-      <strong>3.</strong> Açılan editördeki kodu tamamen sil, aşağıdaki kodu yapıştır ve 💾 kaydet:
-    </div>
-
-    <div class="config-step" style="font-family:monospace; font-size:11.5px; white-space:pre-wrap; background:#1e2a3a; color:#a8d8a8; padding:14px 16px; border-radius:8px; user-select:all;">const SHEET_NAME = 'Liste';
-
-function doPost(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
-    sheet.appendRow(['Ad','Fiyat','PaketAdet','Adet','Link','Notlar','Görsel','ID']);
-  }
-  const data = JSON.parse(e.postData.contents);
-  if (data.action === 'save') {
-    sheet.clearContents();
-    sheet.appendRow(['Ad','Fiyat','PaketAdet','Adet','Link','Notlar','Görsel','ID']);
-    data.rows.forEach(r => sheet.appendRow([r.name,r.price,r.packQty,r.qty,r.url,r.notes,'(img)',r.id]));
-  }
-  return ContentService.createTextOutput(JSON.stringify({ok:true})).setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) return ContentService.createTextOutput(JSON.stringify({rows:[]})).setMimeType(ContentService.MimeType.JSON);
-  const data = sheet.getDataRange().getValues().slice(1);
-  const rows = data.map(r => ({name:r[0],price:r[1],packQty:r[2],qty:r[3],url:r[4],notes:r[5],id:r[7]}));
-  return ContentService.createTextOutput(JSON.stringify({rows})).setMimeType(ContentService.MimeType.JSON);
-}</div>
-
-    <div class="config-step" style="margin-top:12px">
-      <strong>4.</strong> <code>Dağıt → Yeni dağıtım</code> → Tür: <code>Web uygulaması</code> → Erişim: <code>Herkes</code> → <strong>Dağıt</strong> butonuna bas.<br>
-      <strong>5.</strong> Çıkan <strong>Web uygulaması URL</strong>'ini kopyala, aşağıya yapıştır:
-    </div>
-
+    <p class="sub">Apps Script Web App URL'ini yapıştır ve bağla.</p>
     <label>Apps Script Web App URL</label>
     <input type="url" id="sheets-url-input" placeholder="https://script.google.com/macros/s/.../exec" />
-
     <div class="modal-btns">
       <button class="tb-btn" onclick="closeConfig()">İptal</button>
       <button class="tb-btn primary" onclick="saveConfig()">Bağla & Senkronize Et</button>
@@ -932,7 +956,32 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeLinkModal(); closeConfig(); closeZoom(); }
 });
 
+// ── PASSWORD ──
+const APP_PASSWORD = 'boncuk2024'; // ← buradan şifreyi değiştirebilirsin
+
+function checkPassword() {
+  const val = document.getElementById('lock-input').value;
+  if (val === APP_PASSWORD) {
+    sessionStorage.setItem('boncuk-auth', '1');
+    document.getElementById('lock-screen').style.display = 'none';
+  } else {
+    const inp = document.getElementById('lock-input');
+    inp.classList.add('wrong');
+    inp.value = '';
+    setTimeout(() => inp.classList.remove('wrong'), 400);
+  }
+}
+
+document.getElementById('lock-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkPassword();
+});
+
 // ── INIT ──
+if (sessionStorage.getItem('boncuk-auth') === '1') {
+  document.getElementById('lock-screen').style.display = 'none';
+} else {
+  setTimeout(() => document.getElementById('lock-input').focus(), 100);
+}
 if (SHEETS_URL) {
   document.getElementById('setup-banner').style.display = 'none';
   setSyncStatus('ok', 'Sheets bağlı');
