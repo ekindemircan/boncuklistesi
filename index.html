@@ -314,6 +314,10 @@ td.c { text-align: center; }
 td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; text-align: center; }
 
 /* thumbnail in table */
+.tbl-img-wrap {
+  position: relative;
+  display: inline-block;
+}
 .tbl-img {
   width: 52px; height: 52px;
   object-fit: cover;
@@ -323,7 +327,24 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
   display: block;
   transition: transform .15s;
 }
-.tbl-img:hover { transform: scale(1.08); }
+.tbl-img:hover { transform: scale(1.06); }
+.img-preview-popup {
+  display: none;
+  position: fixed;
+  width: 180px; height: 180px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid var(--border2);
+  box-shadow: 0 8px 32px rgba(26,36,51,.22);
+  pointer-events: none;
+  z-index: 500;
+  background: #fff;
+}
+.img-preview-popup img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .tbl-img-empty {
   width: 52px; height: 52px;
   border-radius: 7px;
@@ -630,7 +651,7 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
         <th style="min-width:180px">Ürün Adı</th>
         <th style="width:110px">Fiyat (₺)</th>
         <th style="width:110px" class="c">Pakette Adet</th>
-        <th style="width:110px" class="c">Alacağım</th>
+        <th style="width:110px" class="c">Ekle</th>
         <th style="width:115px">Toplam</th>
         <th style="width:130px" class="c">Site</th>
         <th style="min-width:120px">Notlar</th>
@@ -671,6 +692,11 @@ td.num { color: var(--text3); font-size: 12px; font-weight: 600; width: 36px; te
       <button class="tb-btn primary" onclick="saveConfig()">Bağla & Senkronize Et</button>
     </div>
   </div>
+</div>
+
+<!-- IMG HOVER POPUP -->
+<div class="img-preview-popup" id="img-popup">
+  <img id="img-popup-src" src="" alt="">
 </div>
 
 <div id="toast"></div>
@@ -735,7 +761,7 @@ function addRow() {
     name,
     price: price || '',
     packQty: packq || '1',
-    qty: '1',
+    qty: '0',
     url: link,
     notes: '',
     image: pendingImage || '',
@@ -771,12 +797,15 @@ function render() {
     if (r._new) { tr.className = 'row-new'; setTimeout(() => { r._new = false; }, 300); }
 
     const price   = parseFloat(r.price) || 0;
-    const qty     = parseInt(r.qty) || 1;
+    const qty     = parseInt(r.qty) || 0;
     const total   = price * qty;
     const totalStr = total > 0 ? '₺' + total.toFixed(2).replace('.', ',') : '—';
 
     const imgCell = r.image
-      ? `<img class="tbl-img" src="${r.image}" alt="" onclick="openZoom('${r.image.replace(/'/g, "\\'")}')">`
+      ? `<div class="tbl-img-wrap"><img class="tbl-img" src="${r.image}" alt=""
+            onclick="openZoom('${r.image.replace(/'/g, "\\'").replace(/\n/g,'')}')"
+            onmouseenter="showPreview(event,'${r.image.replace(/'/g, "\\'").replace(/\n/g,'')}')"
+            onmouseleave="hidePreview()"></div>`
       : `<div class="tbl-img-empty">🧿</div>`;
 
     const linkCell = r.url
@@ -823,7 +852,7 @@ function upd(i, field, val) {
 }
 
 function chQty(i, d) {
-  const next = Math.max(1, (parseInt(rows[i].qty) || 1) + d);
+  const next = Math.max(0, (parseInt(rows[i].qty) || 0) + d);
   rows[i].qty = String(next);
   persist();
   document.getElementById(`qv-${i}`).textContent = next;
@@ -833,7 +862,7 @@ function chQty(i, d) {
 
 function recalcRow(i) {
   const r = rows[i];
-  const total = (parseFloat(r.price)||0) * (parseInt(r.qty)||1);
+  const total = (parseFloat(r.price)||0) * (parseInt(r.qty)||0);
   const el = document.getElementById(`tt-${i}`);
   if (el) el.textContent = total > 0 ? '₺' + total.toFixed(2).replace('.', ',') : '—';
 }
@@ -849,7 +878,7 @@ function delRow(i) {
 function updateStats() {
   const n = rows.length;
   const qty = rows.reduce((s,r) => s + (parseInt(r.qty)||0), 0);
-  const total = rows.reduce((s,r) => s + (parseFloat(r.price)||0)*(parseInt(r.qty)||1), 0);
+  const total = rows.reduce((s,r) => s + (parseFloat(r.price)||0)*(parseInt(r.qty)||0), 0);
   const avg = n ? rows.reduce((s,r) => s+(parseFloat(r.price)||0),0)/n : 0;
   document.getElementById('s-count').textContent = n;
   document.getElementById('s-qty').textContent = qty;
@@ -859,14 +888,16 @@ function updateStats() {
 
 // ── PERSIST ──
 async function persist() {
+  // Save everything (including images) to localStorage
   localStorage.setItem('boncuk-rows', JSON.stringify(rows));
   if (!SHEETS_URL) return;
   setSyncStatus('busy', 'Kaydediliyor...');
   try {
-    // strip large images before sending to sheets (too large for Apps Script)
-    const lean = rows.map(r => ({...r, image: r.image ? '(img)' : ''}));
+    // Send to Sheets without images (too large)
+    const lean = rows.map(r => ({...r, image: ''}));
     await fetch(SHEETS_URL, {
       method: 'POST',
+      mode: 'no-cors',
       body: JSON.stringify({ action: 'save', rows: lean }),
     });
     setSyncStatus('ok', 'Senkronize ✓');
@@ -899,6 +930,33 @@ function saveLinkModal() {
   closeLinkModal();
 }
 document.getElementById('link-input').addEventListener('keydown', e => { if(e.key==='Enter') saveLinkModal(); });
+
+// ── IMG HOVER POPUP ──
+const popup = document.getElementById('img-popup');
+const popupImg = document.getElementById('img-popup-src');
+
+function showPreview(e, src) {
+  popupImg.src = src;
+  popup.style.display = 'block';
+  movePopup(e);
+}
+function hidePreview() {
+  popup.style.display = 'none';
+  popupImg.src = '';
+}
+function movePopup(e) {
+  const margin = 12;
+  const size = 180;
+  let x = e.clientX + margin;
+  let y = e.clientY + margin;
+  if (x + size > window.innerWidth)  x = e.clientX - size - margin;
+  if (y + size > window.innerHeight) y = e.clientY - size - margin;
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+}
+document.addEventListener('mousemove', e => {
+  if (popup.style.display === 'block') movePopup(e);
+});
 
 // ── ZOOM ──
 function openZoom(src) {
